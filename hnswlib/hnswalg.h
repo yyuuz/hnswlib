@@ -281,7 +281,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 visited_array[candidate_id] = visited_array_tag;
                 char *currObj1 = (getDataByInternalId(candidate_id));
 
-                dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);//距离计算
                 if (top_candidates.size() < ef_construction_ || lowerBound > dist1) {
                     candidateSet.emplace(-dist1, candidate_id);
 #ifdef USE_SSE
@@ -452,7 +452,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         while (top_candidates.size() > 0) {
             queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
             top_candidates.pop();
-        }
+        }//新的优先队列保持距离从远到近的顺序
 
         while (queue_closest.size()) {
             if (return_list.size() >= M)
@@ -466,7 +466,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 dist_t curdist =
                         fstdistfunc_(getDataByInternalId(second_pair.second),
                                         getDataByInternalId(curent_pair.second),
-                                        dist_func_param_);
+                                        dist_func_param_);//距离计算 getDataByInternalId(second_pair.second)对一个点调用了很多次，感觉可以优化
                 if (curdist < dist_to_query) {
                     good = false;
                     break;
@@ -475,7 +475,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             if (good) {
                 return_list.push_back(curent_pair);
             }
-        }
+        }//这里没有论文中补充至M个的步骤，也就是说会少于M个
 
         for (std::pair<dist_t, tableint> curent_pair : return_list) {
             top_candidates.emplace(-curent_pair.first, curent_pair.second);
@@ -503,14 +503,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
-    tableint mutuallyConnectNewElement(
+    tableint  mutuallyConnectNewElement(
         const void *data_point,
         tableint cur_c,
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
         int level,
         bool isUpdate) {
-        size_t Mcurmax = level ? maxM_ : maxM0_;
-        getNeighborsByHeuristic2(top_candidates, M_);
+        size_t Mcurmax = level ? maxM_ : maxM0_;//Mcurmax: 决定了当前层的最大邻居数量。如果在第 0 层，邻居数上限为 maxM0_，否则为 maxM_。
+        getNeighborsByHeuristic2(top_candidates, M_);//使用一种启发式方法从 top_candidates 中选择M_个最优的邻居节点
         if (top_candidates.size() > M_)
             throw std::runtime_error("Should be not be more than M_ candidates returned by the heuristic");
 
@@ -523,6 +523,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
         tableint next_closest_entry_point = selectedNeighbors.back();
 
+        //更新cur的邻接表
         {
             // lock only during the update
             // because during the addition the lock for cur_c is already acquired
@@ -548,9 +549,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     throw std::runtime_error("Trying to make a link on a non-existent level");
 
                 data[idx] = selectedNeighbors[idx];
-            }
+            }//将 selectedNeighbors 中的节点 ID 填充到当前节点的邻居列表中
         }
 
+        //更新邻居节点的邻接表
         for (size_t idx = 0; idx < selectedNeighbors.size(); idx++) {
             std::unique_lock <std::mutex> lock(link_list_locks_[selectedNeighbors[idx]]);
 
@@ -583,13 +585,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
             // If cur_c is already present in the neighboring connections of `selectedNeighbors[idx]` then no need to modify any connections or run the heuristics.
             if (!is_cur_c_present) {
-                if (sz_link_list_other < Mcurmax) {
+                if (sz_link_list_other < Mcurmax) {//没有超过最大邻居数量
                     data[sz_link_list_other] = cur_c;
                     setListCount(ll_other, sz_link_list_other + 1);
                 } else {
                     // finding the "weakest" element to replace it with the new one
                     dist_t d_max = fstdistfunc_(getDataByInternalId(cur_c), getDataByInternalId(selectedNeighbors[idx]),
-                                                dist_func_param_);
+                                                dist_func_param_);//这不是算过了吗
                     // Heuristic:
                     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
                     candidates.emplace(d_max, cur_c);
@@ -601,13 +603,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                     }
 
                     getNeighborsByHeuristic2(candidates, Mcurmax);
-
+                    //将cur和已有节点 与这个neighbor的距离计算出来再次启发式筛选
+                    //是否重复计算了距离，可以优化
                     int indx = 0;
                     while (candidates.size() > 0) {
                         data[indx] = candidates.top().second;
                         candidates.pop();
                         indx++;
-                    }
+                    }//重新填入邻接表
 
                     setListCount(ll_other, indx);
                     // Nearest K:
@@ -1157,7 +1160,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             // if so, updating it *instead* of creating a new element.
             std::unique_lock <std::mutex> lock_table(label_lookup_lock);
             auto search = label_lookup_.find(label);
-            if (search != label_lookup_.end()) {
+            if (search != label_lookup_.end()) {//找到了相同的节点
                 tableint existingInternalId = search->second;
                 if (allow_replace_deleted_) {
                     if (isMarkedDeleted(existingInternalId)) {
@@ -1168,8 +1171,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
                 if (isMarkedDeleted(existingInternalId)) {
                     unmarkDeletedInternal(existingInternalId);
-                }
+                }//取消删除标记
                 updatePoint(data_point, existingInternalId, 1.0);
+                //通过updatePoint更新该节点的数据
 
                 return existingInternalId;
             }
@@ -1181,6 +1185,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             cur_c = cur_element_count;
             cur_element_count++;
             label_lookup_[label] = cur_c;
+            //函数生成一个新的 tableint 值 cur_c 作为新节点的内部 ID，并在 label_lookup_ 中建立 label 与 cur_c 的映射。
         }
 
         std::unique_lock <std::mutex> lock_el(link_list_locks_[cur_c]);
@@ -1189,6 +1194,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             curlevel = level;
 
         element_levels_[cur_c] = curlevel;
+        //随机生成新节点的层数（或使用指定的层数），并将其记录在 element_levels_ 中。
 
         std::unique_lock <std::mutex> templock(global);
         int maxlevelcopy = maxlevel_;
@@ -1215,19 +1221,20 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
                 for (int level = maxlevelcopy; level > curlevel; level--) {
                     bool changed = true;
-                    while (changed) {
+                    while (changed) {//不断更新当前最接近的数据点 currObj，直到找不到更接近的节点为止
                         changed = false;
                         unsigned int *data;
                         std::unique_lock <std::mutex> lock(link_list_locks_[currObj]);
                         data = get_linklist(currObj, level);
                         int size = getListCount(data);
+                        //获取当前节点在指定层的邻居列表，size 是邻居列表的大小。
 
                         tableint *datal = (tableint *) (data + 1);
                         for (int i = 0; i < size; i++) {
                             tableint cand = datal[i];
                             if (cand < 0 || cand > max_elements_)
                                 throw std::runtime_error("cand error");
-                            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
+                            dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);//距离计算
                             if (d < curdist) {
                                 curdist = d;
                                 currObj = cand;
@@ -1236,7 +1243,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                         }
                     }
                 }
-            }
+            }//todo
 
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
             for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
@@ -1245,12 +1252,15 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                         currObj, data_point, level);
+                        //searchBaseLayer 函数会在指定的 level 层进行搜索，寻找与当前节点 data_point 最近的候选邻居节点，返回一个优先队列 top_candidates，队列中的元素按照距离排序，距离越近的节点排在前面。
+                        //和论文的算法不一样，这里的ep:currObj仍然只有一个
                 if (epDeleted) {
                     top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
                         top_candidates.pop();
-                }
+                }//如果入口点 enterpoint_copy 被标记为已删除，则将其作为候选节点之一加入到 top_candidates 中，因为入口节点很重要？
                 currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
+                //在 level 层将新插入节点 cur_c 与 top_candidates 中的候选节点相互连接（双向连接）。
             }
         } else {
             // Do nothing for the first element
