@@ -509,7 +509,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
         int level,
         bool isUpdate) {
-        size_t Mcurmax = level ? maxM_ : maxM0_;//Mcurmax: 决定了当前层的最大邻居数量。如果在第 0 层，邻居数上限为 maxM0_，否则为 maxM_。
+        size_t Mcurmax = level ? maxM_ : maxM0_;//Mcurmax: 决定了当前层的最大邻居数量。如果在第 0 层，邻居数上限为 maxM0_，否则为 maxM_
         getNeighborsByHeuristic2(top_candidates, M_);//使用一种启发式方法从 top_candidates 中选择M_个最优的邻居节点
         if (top_candidates.size() > M_)
             throw std::runtime_error("Should be not be more than M_ candidates returned by the heuristic");
